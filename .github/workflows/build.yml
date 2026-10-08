@@ -18,14 +18,20 @@ jobs:
         with:
           channel: 'stable'
 
-      - name: Build APK with Full Permissions
+      - name: Build APK with Internet
         run: |
           flutter create --org com.scriptflow.app --project-name scriptflow app
           cd app
-          flutter pub add http shared_preferences
+          flutter pub add http
 
-          find android -name "AndroidManifest.xml" -exec sed -i '/\n    ' {} +
-          sed -i 's/<application /<application android:usesCleartextTraffic="true" /g' android/app/src/main/AndroidManifest.xml
+          python3 -c "
+          p = 'android/app/src/main/AndroidManifest.xml'
+          with open(p, 'r') as f: c = f.read()
+          perms = '    \n    \n'
+          c = c.replace('<manifest', perms + '<manifest', 1)
+          c = c.replace('<application', '<application android:usesCleartextTraffic=\"true\"', 1)
+          with open(p, 'w') as f: f.write(c)
+          "
 
           cp ../main.dart lib/main.dart
           flutter build apk --release --no-tree-shake-icons
