@@ -405,7 +405,7 @@ class _MainStudioScreenState extends State<MainStudioScreen> {
                                       icon: const Icon(Icons.copy, size: 16, color: Colors.white70),
                                       label: const Text('Копировать', style: TextStyle(color: Colors.white70)),
                                       style: OutlinedButton.styleFrom(
-                                        side: Border.all(color: Colors.white24),
+                                        side: const BorderSide(color: Colors.white24),
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                       ),
                                     )
@@ -985,7 +985,7 @@ class _TeleprompterScreenState extends State<TeleprompterScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   CircleAvatar(
-                    backgroundColor: Colors.black50,
+                    backgroundColor: Colors.black.withOpacity(0.5),
                     child: IconButton(
                       icon: const Icon(Icons.arrow_back, color: Colors.white),
                       onPressed: () => Navigator.pop(context),
@@ -995,7 +995,7 @@ class _TeleprompterScreenState extends State<TeleprompterScreen> {
                     children: [
                       // Зеркало
                       CircleAvatar(
-                        backgroundColor: _isMirrored ? const Color(0xFFFFB300) : Colors.black50,
+                        backgroundColor: _isMirrored ? const Color(0xFFFFB300) : Colors.black.withOpacity(0.5),
                         child: IconButton(
                           icon: Icon(Icons.flip, color: _isMirrored ? Colors.black : Colors.white),
                           onPressed: () => setState(() => _isMirrored = !_isMirrored),
@@ -1004,7 +1004,7 @@ class _TeleprompterScreenState extends State<TeleprompterScreen> {
                       const SizedBox(width: 8),
                       // Перезапуск наверх
                       CircleAvatar(
-                        backgroundColor: Colors.black50,
+                        backgroundColor: Colors.black.withOpacity(0.5),
                         child: IconButton(
                           icon: const Icon(Icons.replay_rounded, color: Colors.white),
                           onPressed: _resetToTop,
