@@ -18,11 +18,15 @@ jobs:
         with:
           channel: 'stable'
 
-      - name: Build APK
+      - name: Build APK with Full Permissions
         run: |
           flutter create --org com.scriptflow.app --project-name scriptflow app
           cd app
-          flutter pub add http
+          flutter pub add http shared_preferences
+
+          find android -name "AndroidManifest.xml" -exec sed -i '/\n    ' {} +
+          sed -i 's/<application /<application android:usesCleartextTraffic="true" /g' android/app/src/main/AndroidManifest.xml
+
           cp ../main.dart lib/main.dart
           flutter build apk --release --no-tree-shake-icons
 
