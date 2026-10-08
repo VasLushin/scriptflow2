@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
+
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -75,9 +75,9 @@ class _MainStudioScreenState extends State<MainStudioScreen> {
   }
 
   Future<void> _loadProStatus() async {
-    final prefs = await SharedPreferences.getInstance();
+    // no prefs
     setState(() {
-      _isProActive = prefs.getBool('is_pro_active') ?? true;
+      _isProActive = true;
     });
   }
 
@@ -671,8 +671,8 @@ class _ProPlansModalState extends State<ProPlansModal> {
     final code = _codeController.text.trim();
     if (code.isEmpty) return;
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('is_pro_active', true);
+    // no prefs
+    // no prefs
 
     if (!mounted) return;
     Navigator.pop(context);
