@@ -1,9 +1,12 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,
@@ -49,6 +52,7 @@ class _MainStudioScreenState extends State<MainStudioScreen> {
   int _selectedToneIndex = 0;
   bool _isLoading = false;
   String _generatedScript = '';
+  bool _isProActive = true;
 
   final List<Map<String, dynamic>> _formats = [
     {'title': 'Хук на 3 сек', 'sub': 'Вирусный захват', 'icon': Icons.bolt, 'tag': 'Виральный хук (первые 3-5 секунд с шок-фактом)'},
@@ -64,20 +68,36 @@ class _MainStudioScreenState extends State<MainStudioScreen> {
     '😏 Сарказм / Ирония',
   ];
 
+  @override
+  void initState() {
+    super.initState();
+    _loadProStatus();
+  }
+
+  Future<void> _loadProStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _isProActive = prefs.getBool('is_pro_active') ?? true;
+    });
+  }
+
+  void _showProBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => const ProPlansModal(),
+    );
+  }
+
   Future<void> _generate() async {
     final query = _topicController.text.trim();
     if (query.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Введите тему или идею для ролика'),
-          backgroundColor: Colors.redAccent.shade700,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
+      _showToast('Введите тему или идею для ролика', isError: true);
       return;
     }
 
+    FocusScope.of(context).unfocus();
     setState(() {
       _isLoading = true;
       _generatedScript = '';
@@ -86,33 +106,33 @@ class _MainStudioScreenState extends State<MainStudioScreen> {
     final format = _formats[_selectedFormatIndex]['tag'];
     final tone = _tones[_selectedToneIndex];
 
-    final prompt = '''Ты — топ-сценарист вирусных вертикальных видео для TikTok, Reels и YouTube Shorts с миллионными охватами.
-Напиши сценарий на тему: "$query".
+    final prompt = '''Ты — топовый сценарист вирусных вертикальных видео для TikTok, Reels и Shorts.
+Тема: "$query".
 Формат: $format.
 Тон повествования: $tone.
 
-Требования:
-- Текст должен легко читаться в телесуфлёре.
-- Без лишней воды, сразу мощное зацепляющее начало.
-- Раздели на смысловые логические блоки: [ХУК], [ОСНОВНАЯ ЧАСТЬ], [РАЗВЯЗКА/CTA].
-- Добавь в скобках короткие ремарки для диктора: (пауза), (акцент голосом).''';
+Строгие правила:
+- Напиши готовый текст для суфлёра.
+- Начни с мощного зацепляющего хука.
+- Раздели на блоки: [ХУК], [ОСНОВНАЯ ЧАСТЬ], [РАЗВЯЗКА/CTA].
+- Добавь в скобках ремарки: (пауза), (акцент голосом).''';
 
     try {
       final response = await http.post(
         Uri.parse('https://leingpt.ru/api/v1/chat/completions'),
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json; charset=utf-8',
           'Authorization': 'Bearer lein_aCAQYbCbY4KFx3gr8Lgmp6s4uvX7RfKWGFoiuX9evlw',
         },
         body: jsonEncode({
           'model': 'gpt-4o-mini',
           'messages': [
-            {'role': 'system', 'content': 'Ты профессиональный киносценарист и режиссёр вирусных вертикальных форматов.'},
+            {'role': 'system', 'content': 'Ты профессиональный киносценарист и режиссёр.'},
             {'role': 'user', 'content': prompt}
           ],
           'temperature': 0.75,
         }),
-      );
+      ).timeout(const Duration(seconds: 40));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
@@ -121,18 +141,37 @@ class _MainStudioScreenState extends State<MainStudioScreen> {
         });
       } else {
         setState(() {
-          _generatedScript = 'Ошибка сервера [HTTP ${response.statusCode}]. Проверьте баланс ключа или повторите попытку.';
+          _generatedScript = 'Ошибка сервера [HTTP \${response.statusCode}]. Повторите попытку чуть позже.';
         });
       }
+    } on SocketException catch (_) {
+      setState(() {
+        _generatedScript = '⚠️ Ошибка подключения к сети.\n\nПроверьте подключение к Wi-Fi или мобильному интернету. Если включен системный VPN, попробуйте временно отключить его.';
+      });
+    } on http.ClientException catch (e) {
+      setState(() {
+        _generatedScript = '⚠️ Ошибка сетевого клиента: \${e.message}\nПроверьте доступность интернета на устройстве.';
+      });
     } catch (e) {
       setState(() {
-        _generatedScript = 'Ошибка подключения к сети: $e';
+        _generatedScript = '⚠️ Ошибка генерации: \$e';
       });
     } finally {
       setState(() {
         _isLoading = false;
       });
     }
+  }
+
+  void _showToast(String msg, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: isError ? Colors.redAccent.shade700 : const Color(0xFF10B981),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
   }
 
   @override
@@ -233,19 +272,33 @@ class _MainStudioScreenState extends State<MainStudioScreen> {
               ),
             ],
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1E293B),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0xFF334155)),
-            ),
-            child: Row(
-              children: const [
-                Icon(Icons.workspace_premium, color: Color(0xFFF59E0B), size: 16),
-                SizedBox(width: 6),
-                Text('PRO', style: TextStyle(color: Color(0xFFF59E0B), fontWeight: FontWeight.bold, fontSize: 12)),
-              ],
+          GestureDetector(
+            onTap: _showProBottomSheet,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFF59E0B), Color(0xFFD97706)],
+                ),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFF59E0B).withOpacity(0.35),
+                    blurRadius: 12,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: const [
+                  Icon(Icons.workspace_premium, color: Colors.black, size: 17),
+                  SizedBox(width: 5),
+                  Text(
+                    'ТАРИФЫ',
+                    style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 12),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -260,13 +313,6 @@ class _MainStudioScreenState extends State<MainStudioScreen> {
         color: const Color(0xFF131B2E),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: const Color(0xFF222F4C)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.3),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -285,7 +331,7 @@ class _MainStudioScreenState extends State<MainStudioScreen> {
               ),
               GestureDetector(
                 onTap: () {
-                  _topicController.text = 'Секретная операция КГБ: как фальшивый майор обманул всё правительство СССР';
+                  _topicController.text = 'Секретная операция КГБ: фальшивый майор обманул правительство СССР';
                 },
                 child: const Text(
                   'Пример 💡',
@@ -362,15 +408,6 @@ class _MainStudioScreenState extends State<MainStudioScreen> {
                     color: isSelected ? const Color(0xFF6366F1) : const Color(0xFF222F4C),
                     width: isSelected ? 1.8 : 1.0,
                   ),
-                  boxShadow: isSelected
-                      ? [
-                          BoxShadow(
-                            color: const Color(0xFF6366F1).withOpacity(0.25),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
-                          )
-                        ]
-                      : [],
                 ),
                 child: Row(
                   children: [
@@ -526,12 +563,12 @@ class _MainStudioScreenState extends State<MainStudioScreen> {
           CircularProgressIndicator(color: Color(0xFF6366F1), strokeWidth: 3),
           SizedBox(height: 16),
           Text(
-            'Генерация сценария и хука...',
+            'Генерация сценария...',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
           ),
           SizedBox(height: 6),
           Text(
-            'Подбираем темп и ключевые акценты для суфлёра',
+            'Создаём цепляющий хук и темп для речи',
             style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
           ),
         ],
@@ -545,13 +582,6 @@ class _MainStudioScreenState extends State<MainStudioScreen> {
         color: const Color(0xFF131B2E),
         borderRadius: BorderRadius.circular(22),
         border: Border.all(color: const Color(0xFF10B981).withOpacity(0.5), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF10B981).withOpacity(0.15),
-            blurRadius: 25,
-            offset: const Offset(0, 8),
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -576,23 +606,12 @@ class _MainStudioScreenState extends State<MainStudioScreen> {
                     ),
                   ],
                 ),
-                Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.copy_rounded, color: Color(0xFF94A3B8), size: 20),
-                      onPressed: () {
-                        Clipboard.setData(ClipboardData(text: _generatedScript));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: const Text('Текст скопирован в буфер!'),
-                            behavior: SnackBarBehavior.floating,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          ),
-                        );
-                      },
-                      tooltip: 'Скопировать',
-                    ),
-                  ],
+                IconButton(
+                  icon: const Icon(Icons.copy_rounded, color: Color(0xFF94A3B8), size: 20),
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: _generatedScript));
+                    _showToast('Текст скопирован!');
+                  },
                 ),
               ],
             ),
@@ -617,7 +636,6 @@ class _MainStudioScreenState extends State<MainStudioScreen> {
                 foregroundColor: Colors.black,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                elevation: 4,
               ),
               icon: const Icon(Icons.play_circle_filled, size: 22, color: Colors.black),
               label: const Text(
@@ -638,6 +656,205 @@ class _MainStudioScreenState extends State<MainStudioScreen> {
   }
 }
 
+class ProPlansModal extends StatefulWidget {
+  const ProPlansModal({super.key});
+
+  @override
+  State<ProPlansModal> createState() => _ProPlansModalState();
+}
+
+class _ProPlansModalState extends State<ProPlansModal> {
+  final TextEditingController _codeController = TextEditingController();
+  int _selectedPlan = 1;
+
+  void _activatePromo() async {
+    final code = _codeController.text.trim();
+    if (code.isEmpty) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('is_pro_active', true);
+
+    if (!mounted) return;
+    Navigator.pop(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('🎉 PRO-доступ успешно активирован!'),
+        backgroundColor: const Color(0xFF10B981),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.only(
+        top: 24,
+        left: 20,
+        right: 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      decoration: const BoxDecoration(
+        color: Color(0xFF0F172A),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+        border: Border(top: BorderSide(color: Color(0xFF334155))),
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(
+                width: 44,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: const [
+                Icon(Icons.workspace_premium, color: Color(0xFFF59E0B), size: 28),
+                SizedBox(width: 8),
+                Text(
+                  'SCRIPTFLOW PRO',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.2,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Безлимитные вирусные сценарии и суфлёр 4K',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+            ),
+            const SizedBox(height: 22),
+            _buildPlanItem(0, '1 Месяц', '390 ₽', '13 ₽ / день'),
+            const SizedBox(height: 10),
+            _buildPlanItem(1, 'Навсегда (PRO Lifetime)', '990 ₽', 'Выгода 80%', isBest: true),
+            const SizedBox(height: 22),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFF59E0B),
+                foregroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Переход к оплате (СБП / Карта РФ)...'),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              },
+              child: const Text(
+                'ОФОРМИТЬ ПОДПИСКУ ⚡',
+                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Divider(color: Color(0xFF334155)),
+            const SizedBox(height: 10),
+            const Text(
+              'Уже есть код доступа или промокод?',
+              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _codeController,
+                    decoration: InputDecoration(
+                      hintText: 'Введите код активации',
+                      hintStyle: const TextStyle(color: Color(0xFF475569), fontSize: 13),
+                      filled: true,
+                      fillColor: const Color(0xFF1E293B),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF6366F1),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: _activatePromo,
+                  child: const Text('Применить', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPlanItem(int idx, String title, String price, String sub, {bool isBest = false}) {
+    final isSel = _selectedPlan == idx;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedPlan = idx),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isSel ? const Color(0xFF1E293B) : const Color(0xFF131B2E),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSel ? const Color(0xFFF59E0B) : const Color(0xFF334155),
+            width: isSel ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                    if (isBest) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF59E0B),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text('ХИТ', style: TextStyle(color: Colors.black, fontSize: 10, fontWeight: FontWeight.w900)),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(sub, style: const TextStyle(color: Color(0xFF10B981), fontSize: 12, fontWeight: FontWeight.w600)),
+              ],
+            ),
+            Text(price, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class StudioTeleprompterScreen extends StatefulWidget {
   final String scriptText;
   const StudioTeleprompterScreen({super.key, required this.scriptText});
@@ -652,14 +869,23 @@ class _StudioTeleprompterScreenState extends State<StudioTeleprompterScreen> {
   double _speed = 2.0;
   double _fontSize = 32.0;
   bool _isMirrored = false;
+  int _countdown = 0;
 
-  void _togglePlay() {
-    setState(() {
-      _isPlaying = !_isPlaying;
-    });
+  void _startWithCountdown() async {
     if (_isPlaying) {
-      _runAutoScroll();
+      setState(() => _isPlaying = false);
+      return;
     }
+
+    setState(() => _countdown = 3);
+    while (_countdown > 0) {
+      await Future.delayed(const Duration(seconds: 1));
+      if (!mounted) return;
+      setState(() => _countdown--);
+    }
+
+    setState(() => _isPlaying = true);
+    _runAutoScroll();
   }
 
   void _runAutoScroll() async {
@@ -690,7 +916,7 @@ class _StudioTeleprompterScreenState extends State<StudioTeleprompterScreen> {
         child: Stack(
           children: [
             GestureDetector(
-              onTap: _togglePlay,
+              onTap: _startWithCountdown,
               child: Transform(
                 alignment: Alignment.center,
                 transform: Matrix4.identity()..scale(_isMirrored ? -1.0 : 1.0, 1.0),
@@ -712,6 +938,34 @@ class _StudioTeleprompterScreenState extends State<StudioTeleprompterScreen> {
                 ),
               ),
             ),
+            Center(
+              child: IgnorePointer(
+                child: Container(
+                  height: 60,
+                  decoration: BoxDecoration(
+                    border: Border.symmetric(
+                      horizontal: BorderSide(color: const Color(0xFF6366F1).withOpacity(0.35), width: 1.5),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            if (_countdown > 0)
+              Center(
+                child: Container(
+                  width: 100,
+                  height: 100,
+                  decoration: const BoxDecoration(
+                    color: Colors.black87,
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    '$_countdown',
+                    style: const TextStyle(fontSize: 54, fontWeight: FontWeight.w900, color: Color(0xFFF59E0B)),
+                  ),
+                ),
+              ),
             Positioned(
               top: 12,
               left: 16,
@@ -755,7 +1009,6 @@ class _StudioTeleprompterScreenState extends State<StudioTeleprompterScreen> {
                         child: IconButton(
                           icon: const Icon(Icons.flip, color: Colors.white, size: 20),
                           onPressed: () => setState(() => _isMirrored = !_isMirrored),
-                          tooltip: 'Зеркальный режим для стекла',
                         ),
                       ),
                     ],
@@ -773,18 +1026,11 @@ class _StudioTeleprompterScreenState extends State<StudioTeleprompterScreen> {
                   color: const Color(0xFF131B2E).withOpacity(0.95),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: const Color(0xFF334155)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.5),
-                      blurRadius: 20,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
                 ),
                 child: Row(
                   children: [
                     GestureDetector(
-                      onTap: _togglePlay,
+                      onTap: _startWithCountdown,
                       child: Container(
                         width: 44,
                         height: 44,
