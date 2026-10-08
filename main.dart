@@ -30,16 +30,12 @@ class ScriptFlowApp extends StatelessWidget {
           secondary: Color(0xFF6366F1),
           surface: Color(0xFF161D2B),
         ),
-        fontFamily: 'sans-serif',
       ),
       home: const MainStudioScreen(),
     );
   }
 }
 
-// ==========================================
-// МОДЕЛИ И СТРУКТУРЫ ДАННЫХ
-// ==========================================
 class SavedProject {
   final String id;
   final String title;
@@ -56,9 +52,6 @@ class SavedProject {
   });
 }
 
-// ==========================================
-// ГЛАВНЫЙ ЭКРАН СТУДИИ
-// ==========================================
 class MainStudioScreen extends StatefulWidget {
   const MainStudioScreen({super.key});
 
@@ -79,7 +72,6 @@ class _MainStudioScreenState extends State<MainStudioScreen> {
   String _generatedScript = '';
   List<String> _alternateHooks = [];
 
-  // Локальная база сохраненных проектов
   final List<SavedProject> _savedProjects = [];
 
   final List<String> _formats = [
@@ -99,12 +91,12 @@ class _MainStudioScreenState extends State<MainStudioScreen> {
   ];
 
   final List<String> _topicIdeas = [
-    'Секретная привычка миллионеров, о которой молчат',
-    'Почему 90% людей никогда не разбогатеют',
-    'Что произойдёт, если перестать спать на 3 дня',
-    'Ошибка в резюме, которая лишает вас 200 000 ₽',
-    'Психологический трюк, заставляющий любого сказать ДА',
-    '3 сервиса нейросетей, заменяющие целый отдел маркетинга'
+    'Почему умные люди часто остаются бедными',
+    '3 привычки, разрушающие дисциплину по утрам',
+    'Как говорить нет без чувства вины',
+    'Что скрывают производители дешёвых продуктов',
+    'Главная ошибка при переговорах о зарплате',
+    'Секретный психологический трюк спецслужб'
   ];
 
   @override
@@ -114,20 +106,16 @@ class _MainStudioScreenState extends State<MainStudioScreen> {
     super.dispose();
   }
 
-  // Расчет темпа речи (130 слов в минуту)
   int _calculateSpeakingSeconds(String text) {
     if (text.trim().isEmpty) return 0;
     final words = text.trim().split(RegExp(r'\s+')).length;
-    return max(1, (words / 2.1).round());
+    return max(1, (words / 2.2).round());
   }
 
-  // ==========================================
-  // ГЕНЕРАЦИЯ СЦЕНАРИЯ (ОНЛАЙН С ОФФЛАЙН ЗАЩИТОЙ)
-  // ==========================================
   Future<void> _generateScript() async {
     final topic = _topicController.text.trim();
     if (topic.isEmpty) {
-      _showSnack('Введите тему или выберите идею ниже!', Colors.orangeAccent);
+      _showSnack('Введите тему ролика или выберите идею ниже!', Colors.orangeAccent);
       return;
     }
 
@@ -139,14 +127,15 @@ class _MainStudioScreenState extends State<MainStudioScreen> {
 
     FocusScope.of(context).unfocus();
 
-    // Пытаемся обратиться к API, при любом сетевом сбое (нет интернета, таймаут, блокировка)
-    // моментально и бесшовно включается встроенный интеллектуальный генератор!
     String resultScript = '';
 
+    // Запрос в онлайн API с расширенным таймаутом
     try {
-      final prompt = 'Ты топовый сценарист вирусных рилс и шортс. Напиши сценарий на тему: "$topic". '
-          'Формат: $_selectedFormat. Тон: $_selectedTone. Хронометраж: ~$_targetSeconds сек. '
-          'Структура: 1) Взрывной хук первых 3 секунд, 2) Захватывающая суть без воды, 3) Призыв к действию (CTA).';
+      final prompt = 'Ты топовый продюсер и сценарист YouTube Shorts, Reels и TikTok. '
+          'Напиши совершенно уникальный, живой, реалистичный сценарий на тему: "$topic". '
+          'Формат: $_selectedFormat. Тональность: $_selectedTone. '
+          'Требования: никакой воды, яркая кинематографичная речь, реальные инсайты, '
+          'четкая драматургия с неожиданным поворотом и призывом к действию.';
 
       final response = await http.post(
         Uri.parse('https://leingpt.ru/api/generate'),
@@ -154,32 +143,31 @@ class _MainStudioScreenState extends State<MainStudioScreen> {
         body: jsonEncode({
           'prompt': prompt,
           'model': 'yandexgpt',
-          'temperature': 0.7,
+          'temperature': 0.85,
         }),
-      ).timeout(const Duration(seconds: 4));
+      ).timeout(const Duration(seconds: 12));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
-        resultScript = data['text'] ?? data['result'] ?? '';
+        final rawText = data['text'] ?? data['result'] ?? '';
+        if (rawText.toString().trim().length > 60) {
+          resultScript = rawText.toString().trim();
+        }
       }
-    } catch (_) {
-      // Игнорируем сетевые ошибки - включается автономный AI-двигатель
-    }
+    } catch (_) {}
 
-    // Если сеть не ответила или вернула пустоту - генерируем высококлассный сценарий на лету
+    // Если нет связи, срабатывает богатый вариативный оффлайн-двигатель
     if (resultScript.trim().isEmpty) {
-      resultScript = _generateSmartOfflineScript(topic, _selectedFormat, _selectedTone);
+      resultScript = _buildRichDiverseScript(topic, _selectedFormat, _selectedTone);
     }
 
-    // Генерируем 3 альтернативных хука для теста
-    _alternateHooks = _generateAlternativeHooks(topic, _selectedTone);
+    _alternateHooks = _buildCreativeHooks(topic, _selectedTone);
 
     setState(() {
       _generatedScript = resultScript;
       _isLoading = false;
     });
 
-    // Автоматическая плавная прокрутка к результату
     Future.delayed(const Duration(milliseconds: 300), () {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
@@ -191,56 +179,97 @@ class _MainStudioScreenState extends State<MainStudioScreen> {
     });
   }
 
-  // Интеллектуальный автономный генератор по формулам голливудской драматургии
-  String _generateSmartOfflineScript(String topic, String format, String tone) {
+  // Разнообразный генератор с множеством сюжетных структур
+  String _buildRichDiverseScript(String topic, String format, String tone) {
     final rng = Random();
 
+    if (format.contains('ТОП-3')) {
+      final facts = [
+        '1. Скрытый триггер: мы реагируем не на логику, а на мгновенный дофаминовый стимул.\n'
+        '2. Синдром ложного контроля: 80% попыток исправить это старыми методами только усугубляют проблему.\n'
+        '3. Решающий рычаг: одно простое правило микро-действий меняет траекторию уже через неделю.',
+
+        '1. Правило первого часа: то, куда уходит ваше внимание утром, определяет доход месяца.\n'
+        '2. Избавление от информационного шума: 90% потребляемого контента блокирует критическое мышление.\n'
+        '3. Фиксация результата: отсутствие прозрачных цифр гарантирует возврат к нулю.',
+
+        '1. Ловушка лёгких путей: быстрые результаты почти всегда ведут к откату назад.\n'
+        '2. Окружение и скрытые якоря: пока вокруг вас люди без целей, вы неосознанно копируете их планку.\n'
+        '3. Безжалостный аудит привычек: уберите всего одно деструктивное действие, и результат удвоится.'
+      ];
+      final chosenFacts = facts[rng.nextInt(facts.length)];
+
+      return '🎬 [ХУК: ТОП-3]\n'
+          'Три вещи про $topic, о которых вам никогда не расскажут бесплатно:\n\n'
+          '🔥 [РАЗБОР ПО ПУНКТАМ]\n$chosenFacts\n\n'
+          '🚀 [ФИНАЛ]\n'
+          'Какой из этих трёх пунктов для вас самый сложный? Напишите номер в комментариях!';
+    }
+
+    if (format.contains('сторителлинг') || format.contains('Кино')) {
+      final stories = [
+        'В 1994 году провели эксперимент, результаты которого засекретили на 15 лет. '
+        'Группу добровольцев поместили в условия, напрямую связанные с темой: $topic. '
+        'Уже на четвёртый день учёные заметили аномалию: человеческий мозг начал перестраивать восприятие реальности. '
+        'И вот к какому шокирующему выводу они пришли: дело было вообще не в генетике или удаче. '
+        'Всё упиралось в один-единственный внутренний алгоритм принятия решений.',
+
+        'Представь человека, который потерял всё из-за одной неочевидной ошибки в теме $topic. '
+        'Он потратил годы, пытаясь всё исправить стандартными методами, пока случайно не заметил странную деталь. '
+        'Как только он изменил всего одну переменную в уравнении — система мгновенно заработала в обратную сторону. '
+        'Сегодня этот же принцип используют топовые мировые лидеры, хотя вслух о нём почти не говорят.',
+
+        'Если бы пять лет назад мне показали реальные данные про $topic, я бы не поверил ни единому слову. '
+        'Мы привыкли смотреть на верхушку айсберга и судить по красивой картинке. '
+        'Но когда вы заглядываете за кулисы и видите реальные механизмы — иллюзии испаряются за секунду. '
+        'И сейчас я покажу вам, как работает эта механика без прикрас.'
+      ];
+      final chosenStory = stories[rng.nextInt(stories.length)];
+
+      return '🎬 [КИНЕМАТОГРАФИЧНЫЙ ХУК]\n'
+          'Эта история изменит то, как вы смотрите на $topic, раз и навсегда...\n\n'
+          '🔥 [ДРАМАТУРГИЯ]\n$chosenStory\n\n'
+          '🚀 [ИНСАЙТ И ВЫВОД]\n'
+          'Задайте себе этот вопрос прямо сейчас. И если хотите продолжение расследования — подпишитесь на канал!';
+    }
+
+    // Стандартный взрывной экспертный хук
     final hooks = [
-      'Остановись на 15 секунд, если ты до сих пор думаешь, что $topic — это случайность!',
-      'То, о чём я сейчас расскажу, перевернёт твой взгляд на $topic навсегда.',
-      '99% людей совершают фатальную ошибку, когда сталкиваются с темой: $topic.',
-      'Секретный факт про $topic, который от нас пытались скрыть!',
-      'Если бы мне рассказали это 5 лет назад про $topic, моя жизнь была бы совсем другой.'
+      'Перестаньте совершать эту ошибку, если тема $topic для вас действительно важна!',
+      'То, что вам годами внушали про $topic — это опасное заблуждение.',
+      'Почему одни забирают всё в вопросе "$topic", а другие остаются у разбитого корыта?',
+      'Если бы у меня была всего одна минута, чтобы объяснить суть темы $topic, я бы сказал это...'
     ];
 
-    final meatStories = [
-      'Смотри: большинство людей действует по старым правилам и удивляется, почему нет результата.\n\n'
-      'Вся суть кроется в трёх фундаментальных вещах:\n'
-      '1. Перестань распыляться и сфокусируйся на ключевом рычаге.\n'
-      '2. Убери токсичные сомнения и начни тестировать гипотезы.\n'
-      '3. Запомни главное: побеждает не самый умный, а самый системный.',
-      
-      'Простой эксперимент: представь, что ты меняешь всего одно ключевое действие уже сегодня.\n\n'
-      'Вот что происходит на самом деле:\n'
-      '• Первые 24 часа мозг сопротивляется изменениям.\n'
-      '• На третий день ты замечаешь колоссальный отрыв от остальных.\n'
-      '• Через неделю это превращается в твоё абсолютное супер-оружие.',
-      
-      'Архивы и цифры показывают одну простую закономерность:\n\n'
-      'Когда все бегут в одну сторону, настоящие возможности открываются прямо в противоположной.\n'
-      'Задай себе честный вопрос: ты готов продолжать терять время или хочешь забрать своё прямо сейчас?'
+    final cores = [
+      'Большинство пытается бороться со следствием, полностью игнорируя первопричину.\n'
+      'Запомните фундаментальный закон: пока у вас нет чёткой структуры, любые усилия превращаются в хаос.\n'
+      'Сфокусируйтесь на главном рычаге давления — и всё остальное подтянется автоматически.',
+
+      'Разница между любителем и профессионалом всегда в деталях.\n'
+      'Пока любитель надеется на вдохновение и случай, профессионал выстраивает повторяемую систему.\n'
+      'В теме $topic побеждают не самые громкие, а самые последовательные.',
+
+      'Мы живём в эпоху тотального перегруза информацией.\n'
+      'Умение отсекать 95% бесполезных советов по теме $topic — это единственный навык, который даёт осязаемый результат прямо сегодня.'
     ];
 
     final ctas = [
-      'Сохрани это видео в закладки, чтобы не потерять, и отправь тому, кому сейчас это нужно!',
-      'Напиши в комментариях своё честное мнение — давай обсудим!',
-      'Подпишись, здесь каждый день выходит контент, который меняет мышление.'
+      'Сохраните в закладки, чтобы пересмотреть в нужный момент, и перешлите тому, кто в теме!',
+      'Напишите в комментариях: согласны с этим подходом или у вас другой опыт?',
+      'Жмите подписку — завтра разберём следующую неочевидную ловушку!'
     ];
 
-    final chosenHook = hooks[rng.nextInt(hooks.length)];
-    final chosenMeat = meatStories[rng.nextInt(meatStories.length)];
-    final chosenCta = ctas[rng.nextInt(ctas.length)];
-
-    return '🎬 [ХУК 0-3 СЕК]\n$chosenHook\n\n'
-        '🔥 [ОСНОВНАЯ ЧАСТЬ]\n$chosenMeat\n\n'
-        '🚀 [ПРИЗЫВ К ДЕЙСТВИЮ]\n$chosenCta';
+    return '🎬 [ВЗРЫВНОЙ ХУК]\n${hooks[rng.nextInt(hooks.length)]}\n\n'
+        '🔥 [СУТЬ БЕЗ ВОДЫ]\n${cores[rng.nextInt(cores.length)]}\n\n'
+        '🚀 [ПРИЗЫВ К ДЕЙСТВИЮ]\n${ctas[rng.nextInt(ctas.length)]}';
   }
 
-  List<String> _generateAlternativeHooks(String topic, String tone) {
+  List<String> _buildCreativeHooks(String topic, String tone) {
     return [
-      '⚡ «Никогда не делай этого, если ценишь свой результат: $topic...»',
-      '👀 «Я проверил на себе главное правило про $topic, и вот что вышло...»',
-      '🛑 «Если ты пролистаешь это видео, ты пожалеешь об этом уже завтра: $topic!»',
+      '⚡ «Никогда не делайте этого, если хотите преуспеть в: $topic...»',
+      '👀 «Я проверил главное правило про $topic на практике, и результат меня шокировал!»',
+      '🛑 «9 из 10 людей пролистают это видео, но если вы останетесь — вы поймёте всё про $topic.»',
     ];
   }
 
@@ -260,7 +289,7 @@ class _MainStudioScreenState extends State<MainStudioScreen> {
       _savedProjects.insert(0, project);
     });
 
-    _showSnack('Проект сохранён в избранное! 💾', Colors.greenAccent);
+    _showSnack('Проект сохранён в папку избранного! 💾', Colors.greenAccent);
   }
 
   String _formatDate(DateTime dt) {
@@ -500,13 +529,6 @@ class _MainStudioScreenState extends State<MainStudioScreen> {
                         : [const Color(0xFF6366F1), const Color(0xFF4F46E5)],
                   ),
                   borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: (_isPro ? const Color(0xFFFFB300) : const Color(0xFF6366F1)).withOpacity(0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    )
-                  ],
                 ),
                 child: Row(
                   children: [
@@ -529,7 +551,6 @@ class _MainStudioScreenState extends State<MainStudioScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ПОЛЕ ВВОДА ТЕМЫ
             const Text('О чём снимаем ролик?', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
             const SizedBox(height: 8),
             Container(
@@ -543,7 +564,7 @@ class _MainStudioScreenState extends State<MainStudioScreen> {
                 maxLines: 3,
                 style: const TextStyle(fontSize: 15, color: Colors.white),
                 decoration: const InputDecoration(
-                  hintText: 'Например: 3 роковые ошибки при выборе первой машины или Как удвоить доход на фрилансе...',
+                  hintText: 'Например: 3 привычки, убивающие фокус или Как начать инвестировать с нуля...',
                   hintStyle: TextStyle(color: Colors.grey, fontSize: 14),
                   border: InputBorder.none,
                   contentPadding: EdgeInsets.all(16),
@@ -552,7 +573,6 @@ class _MainStudioScreenState extends State<MainStudioScreen> {
             ),
             const SizedBox(height: 10),
 
-            // БЫСТРЫЕ ИДЕИ
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
@@ -575,7 +595,6 @@ class _MainStudioScreenState extends State<MainStudioScreen> {
             ),
             const SizedBox(height: 18),
 
-            // ВЫБОР ФОРМАТА И ТОНАЛЬНОСТИ
             Row(
               children: [
                 Expanded(
@@ -635,7 +654,6 @@ class _MainStudioScreenState extends State<MainStudioScreen> {
             ),
             const SizedBox(height: 20),
 
-            // КНОПКА ГЕНЕРАЦИИ
             SizedBox(
               width: double.infinity,
               height: 56,
@@ -653,7 +671,7 @@ class _MainStudioScreenState extends State<MainStudioScreen> {
                         children: [
                           SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.black)),
                           SizedBox(width: 14),
-                          Text('ПИШЕМ ВИРУСНЫЙ СЦЕНАРИЙ...', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
+                          Text('СОЗДАЁМ СЦЕНАРИЙ...', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
                         ],
                       )
                     : const Row(
@@ -668,9 +686,7 @@ class _MainStudioScreenState extends State<MainStudioScreen> {
             ),
             const SizedBox(height: 24),
 
-            // РЕЗУЛЬТАТ СЦЕНАРИЯ
             if (_generatedScript.isNotEmpty) ...[
-              // ПЛАШКА ХРОНОМЕТРАЖА
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
@@ -707,9 +723,8 @@ class _MainStudioScreenState extends State<MainStudioScreen> {
               ),
               const SizedBox(height: 14),
 
-              // АЛЬТЕРНАТИВНЫЕ ХУКИ
               if (_alternateHooks.isNotEmpty) ...[
-                const Text('🔥 Выберите лучший хук для ролика:', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white70)),
+                const Text('🔥 Выберите альтернативный хук:', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white70)),
                 const SizedBox(height: 8),
                 ..._alternateHooks.map((hook) {
                   return Container(
@@ -738,7 +753,6 @@ class _MainStudioScreenState extends State<MainStudioScreen> {
                 const SizedBox(height: 14),
               ],
 
-              // КАРТОЧКА СЦЕНАРИЯ
               Container(
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
@@ -780,7 +794,6 @@ class _MainStudioScreenState extends State<MainStudioScreen> {
                     ),
                     const SizedBox(height: 20),
 
-                    // КНОПКА ЗАПУСКА СУФЛЁРА
                     SizedBox(
                       width: double.infinity,
                       height: 52,
@@ -809,7 +822,7 @@ class _MainStudioScreenState extends State<MainStudioScreen> {
 }
 
 // ==========================================
-// ЭКРАН ТЕЛЕСУФЛЁРА ДЛЯ СЪЁМОК
+// ОБНОВЛЕННЫЙ ТЕЛЕСУФЛЁР (БЕЗ ЗЕРКАЛА, С РОВНЫМ ЦЕНТРОМ)
 // ==========================================
 class TeleprompterScreen extends StatefulWidget {
   final String scriptText;
@@ -828,9 +841,9 @@ class _TeleprompterScreenState extends State<TeleprompterScreen> {
   int _countdown = 0;
   Timer? _countdownTimer;
 
-  double _scrollSpeed = 2.0; // Скорость скролла
-  double _fontSize = 28.0;   // Размер шрифта
-  bool _isMirrored = false;  // Зеркальный режим
+  double _scrollSpeed = 2.0;
+  double _fontSize = 28.0;
+  bool _showFocusLine = true; // Кнопка переключения полосы фокуса
 
   @override
   void dispose() {
@@ -902,33 +915,6 @@ class _TeleprompterScreenState extends State<TeleprompterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    Widget textWidget = SingleChildScrollView(
-      controller: _scrollController,
-      padding: EdgeInsets.symmetric(
-        horizontal: 24,
-        vertical: MediaQuery.of(context).size.height * 0.45,
-      ),
-      child: Text(
-        widget.scriptText,
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          fontSize: _fontSize,
-          fontWeight: FontWeight.bold,
-          height: 1.6,
-          color: Colors.white,
-          letterSpacing: 0.5,
-        ),
-      ),
-    );
-
-    if (_isMirrored) {
-      textWidget = Transform(
-        alignment: Alignment.center,
-        transform: Matrix4.rotationY(pi),
-        child: textWidget,
-      );
-    }
-
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
@@ -936,27 +922,53 @@ class _TeleprompterScreenState extends State<TeleprompterScreen> {
           // Основной текст
           GestureDetector(
             onTap: _togglePlay,
-            child: SizedBox.expand(child: textWidget),
-          ),
-
-          // Линия фокуса взгляда по центру
-          Center(
-            child: IgnorePointer(
-              child: Container(
-                height: 50,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  border: Border.symmetric(
-                    horizontal: BorderSide(
-                      color: const Color(0xFFFFB300).withOpacity(0.35),
-                      width: 1.5,
-                    ),
-                  ),
-                  color: const Color(0xFFFFB300).withOpacity(0.04),
+            child: SingleChildScrollView(
+              controller: _scrollController,
+              padding: EdgeInsets.symmetric(
+                horizontal: 24,
+                vertical: MediaQuery.of(context).size.height * 0.45,
+              ),
+              child: Text(
+                widget.scriptText,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: _fontSize,
+                  fontWeight: FontWeight.bold,
+                  height: 1.6,
+                  color: Colors.white,
+                  letterSpacing: 0.5,
                 ),
               ),
             ),
           ),
+
+          // ИДЕАЛЬНО ОТЦЕНТРИРОВАННАЯ ЛИНИЯ ФОКУСА
+          if (_showFocusLine)
+            Positioned(
+              top: MediaQuery.of(context).size.height * 0.40,
+              left: 0,
+              right: 0,
+              child: IgnorePointer(
+                child: Container(
+                  height: 52,
+                  decoration: BoxDecoration(
+                    border: Border.symmetric(
+                      horizontal: BorderSide(
+                        color: const Color(0xFFFFB300).withOpacity(0.35),
+                        width: 1.5,
+                      ),
+                    ),
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.transparent,
+                        const Color(0xFFFFB300).withOpacity(0.08),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
 
           // Обратный отсчёт 3..2..1
           if (_countdown > 0)
@@ -965,7 +977,7 @@ class _TeleprompterScreenState extends State<TeleprompterScreen> {
                 child: Container(
                   padding: const EdgeInsets.all(28),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.8),
+                    color: Colors.black.withOpacity(0.85),
                     shape: BoxShape.circle,
                     border: Border.all(color: const Color(0xFFFFB300), width: 3),
                   ),
@@ -977,7 +989,7 @@ class _TeleprompterScreenState extends State<TeleprompterScreen> {
               ),
             ),
 
-          // Верхняя панель управления
+          // Верхняя панель: Назад, Вкл/Выкл полосы, Сброс
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -985,7 +997,7 @@ class _TeleprompterScreenState extends State<TeleprompterScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   CircleAvatar(
-                    backgroundColor: Colors.black.withOpacity(0.5),
+                    backgroundColor: Colors.black.withOpacity(0.6),
                     child: IconButton(
                       icon: const Icon(Icons.arrow_back, color: Colors.white),
                       onPressed: () => Navigator.pop(context),
@@ -993,20 +1005,26 @@ class _TeleprompterScreenState extends State<TeleprompterScreen> {
                   ),
                   Row(
                     children: [
-                      // Зеркало
+                      // Кнопка включения/выключения полосы взгляда
                       CircleAvatar(
-                        backgroundColor: _isMirrored ? const Color(0xFFFFB300) : Colors.black.withOpacity(0.5),
+                        backgroundColor: _showFocusLine ? const Color(0xFFFFB300) : Colors.black.withOpacity(0.6),
                         child: IconButton(
-                          icon: Icon(Icons.flip, color: _isMirrored ? Colors.black : Colors.white),
-                          onPressed: () => setState(() => _isMirrored = !_isMirrored),
+                          icon: Icon(
+                            _showFocusLine ? Icons.remove_red_eye_rounded : Icons.visibility_off_rounded,
+                            color: _showFocusLine ? Colors.black : Colors.white70,
+                            size: 20,
+                          ),
+                          tooltip: 'Линия взгляда',
+                          onPressed: () => setState(() => _showFocusLine = !_showFocusLine),
                         ),
                       ),
                       const SizedBox(width: 8),
                       // Перезапуск наверх
                       CircleAvatar(
-                        backgroundColor: Colors.black.withOpacity(0.5),
+                        backgroundColor: Colors.black.withOpacity(0.6),
                         child: IconButton(
                           icon: const Icon(Icons.replay_rounded, color: Colors.white),
+                          tooltip: 'В начало',
                           onPressed: _resetToTop,
                         ),
                       ),
@@ -1017,7 +1035,7 @@ class _TeleprompterScreenState extends State<TeleprompterScreen> {
             ),
           ),
 
-          // Нижняя панель настроек (Скорость и Шрифт)
+          // Нижняя панель настроек
           Positioned(
             bottom: 0,
             left: 0,
@@ -1100,7 +1118,7 @@ class _TeleprompterScreenState extends State<TeleprompterScreen> {
 }
 
 // ==========================================
-// МОДАЛКА ТАРИФОВ И ПРОМОКОДОВ
+// МОДАЛКА ТАРИФОВ (ПЕРЕХОД К ОПЛАТЕ ЧЕРЕЗ БОТА)
 // ==========================================
 class ProBillingModal extends StatefulWidget {
   final bool isPro;
@@ -1114,7 +1132,7 @@ class ProBillingModal extends StatefulWidget {
 
 class _ProBillingModalState extends State<ProBillingModal> {
   final TextEditingController _promoController = TextEditingController();
-  int _selectedTariffIndex = 1; // По умолчанию: Навсегда
+  int _selectedTariffIndex = 1;
 
   final List<Map<String, dynamic>> _tariffs = [
     {
@@ -1146,24 +1164,27 @@ class _ProBillingModalState extends State<ProBillingModal> {
       return;
     }
 
-    // Любой из этих промокодов активирует навсегда
-    final validCodes = ['PRO', 'PRO2026', 'SCRIPTFLOW', 'VIP', 'LEIN', 'TOP', 'START', 'FREE'];
+    final validCodes = ['PRO2026', 'SCRIPTFLOW', 'VIP', 'LEIN'];
     if (validCodes.contains(code)) {
       widget.onProActivated();
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('🎉 Промокод успешно принят! Полный PRO-доступ открыт.'),
+          content: Text('🎉 Промокод активирован! VIP-доступ предоставлен.'),
           backgroundColor: Color(0xFF1E2638),
           behavior: SnackBarBehavior.floating,
         ),
       );
     } else {
-      _showMsg('Неверный промокод. Попробуйте промокод: PRO2026');
+      _showMsg('Неверный промокод.');
     }
   }
 
-  void _simulatePayment() {
+  // Переход на официальную оплату через Telegram
+  void _openRealPayment() {
+    const telegramUrl = 'https://t.me/LeinAIbot';
+    Clipboard.setData(const ClipboardData(text: telegramUrl));
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -1171,21 +1192,22 @@ class _ProBillingModalState extends State<ProBillingModal> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Row(
           children: const [
-            Icon(Icons.payment_rounded, color: Color(0xFFFFB300)),
+            Icon(Icons.lock_person_rounded, color: Color(0xFFFFB300)),
             SizedBox(width: 10),
-            Text('Оплата тарифа', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+            Text('Оплата через бота', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
           ],
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Выбран тариф: ${_tariffs[_selectedTariffIndex]['title']}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.amberAccent)),
-            const SizedBox(height: 8),
-            Text('К оплате: ${_tariffs[_selectedTariffIndex]['price']}', style: const TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.w900)),
+            Text('Тариф: ${_tariffs[_selectedTariffIndex]['title']}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.amberAccent)),
+            const SizedBox(height: 6),
+            Text('Стоимость: ${_tariffs[_selectedTariffIndex]['price']}', style: const TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.w900)),
             const SizedBox(height: 14),
             const Text(
-              'Имитация успешной транзакции тестового режима (СБП / Карта). Нажмите подтвердить для мгновенной активации!',
+              'Для завершения оплаты перейдите в официальный бот @LeinAIbot в Telegram. '
+              'После оплаты вы получите персональный ключ активации.',
               style: TextStyle(fontSize: 13, color: Colors.grey),
             ),
           ],
@@ -1193,26 +1215,26 @@ class _ProBillingModalState extends State<ProBillingModal> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Отмена', style: TextStyle(color: Colors.grey)),
+            child: const Text('Закрыть', style: TextStyle(color: Colors.grey)),
           ),
-          ElevatedButton(
+          ElevatedButton.icon(
             onPressed: () {
               Navigator.pop(ctx);
               Navigator.pop(context);
-              widget.onProActivated();
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text('✅ Платёж успешно проведён! PRO активирован.'),
+                  content: Text('Ссылка @LeinAIbot скопирована в буфер обмена! Перейдите в Telegram.'),
                   backgroundColor: Color(0xFF1E2638),
                   behavior: SnackBarBehavior.floating,
                 ),
               );
             },
+            icon: const Icon(Icons.send_rounded, size: 16, color: Colors.black),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFFFB300),
               foregroundColor: Colors.black,
             ),
-            child: const Text('Подтвердить оплату', style: TextStyle(fontWeight: FontWeight.bold)),
+            label: const Text('Перейти к оплате', style: TextStyle(fontWeight: FontWeight.bold)),
           )
         ],
       ),
@@ -1251,7 +1273,6 @@ class _ProBillingModalState extends State<ProBillingModal> {
           ),
           const SizedBox(height: 12),
 
-          // Карточки тарифов
           ...List.generate(_tariffs.length, (i) {
             final t = _tariffs[i];
             final isSelected = _selectedTariffIndex == i;
@@ -1313,7 +1334,6 @@ class _ProBillingModalState extends State<ProBillingModal> {
           }),
           const SizedBox(height: 12),
 
-          // Поле промокода
           Row(
             children: [
               Expanded(
@@ -1330,7 +1350,7 @@ class _ProBillingModalState extends State<ProBillingModal> {
                     textCapitalization: TextCapitalization.characters,
                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                     decoration: const InputDecoration(
-                      hintText: 'Промокод (напр. PRO2026)',
+                      hintText: 'Промокод / Ключ активации',
                       hintStyle: TextStyle(color: Colors.grey, fontSize: 13),
                       border: InputBorder.none,
                     ),
@@ -1354,19 +1374,18 @@ class _ProBillingModalState extends State<ProBillingModal> {
           ),
           const SizedBox(height: 16),
 
-          // Кнопка оплаты
           SizedBox(
             width: double.infinity,
             height: 52,
             child: ElevatedButton(
-              onPressed: _simulatePayment,
+              onPressed: _openRealPayment,
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFFFB300),
                 foregroundColor: Colors.black,
                 elevation: 4,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
-              child: const Text('ОФОРМИТЬ ПОДПИСКУ', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 0.5)),
+              child: const Text('ПЕРЕЙТИ К ОПЛАТЕ ТАРИФА', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 0.5)),
             ),
           ),
         ],
