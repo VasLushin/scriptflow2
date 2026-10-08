@@ -1,8 +1,7 @@
-LeinAI - Твой нейропомощник 🧬:
 name: Build Release APK
 
 on:
-  workflowdispatch:
+  workflow_dispatch:
 
 jobs:
   build:
@@ -19,211 +18,71 @@ jobs:
         with:
           channel: 'stable'
 
-      - name: Build ScriptFlow App
+      - name: Build APK
         run: |
           flutter create --org com.scriptflow.app --project-name scriptflow app
           cd app
           flutter pub add http
-
           cat  lib/main.dart
           import 'dart:convert';
           import 'package:flutter/material.dart';
           import 'package:http/http.dart' as http;
 
-          void main() {
-            runApp(const ScriptFlowApp());
-          }
-
-          class ScriptFlowApp extends StatelessWidget {
-            const ScriptFlowApp({super.key});
-
-            @override
-            Widget build(BuildContext context) {
-              return MaterialApp(
-                title: 'ScriptFlow AI',
-                debugShowCheckedModeBanner: false,
-                theme: ThemeData(
-                  brightness: Brightness.dark,
-                  scaffoldBackgroundColor: const Color(0xFF0F172A),
-                  colorScheme: const ColorScheme.dark(
-                    primary: Color(0xFF6366F1),
-                    secondary: Color(0xFF10B981),
-                  ),
-                ),
-                home: const HomeScreen(),
-              );
-            }
-          }
+          void main() => runApp(const MaterialApp(home: HomeScreen(), debugShowCheckedModeBanner: false));
 
           class HomeScreen extends StatefulWidget {
             const HomeScreen({super.key});
-
             @override
-            State createState() => HomeScreenState();
+            State createState() => _HomeScreenState();
           }
 
-          class HomeScreenState extends State {
-            final TextEditingController topicController = TextEditingController();
-            String selectedFormat = 'Виральный хук (TikTok)';
-            bool isLoading = false;
-            String resultText = '';
+          class _HomeScreenState extends State {
+            final _controller = TextEditingController();
+            String _text = '';
+            bool _loading = false;
 
-            Future generateScript() async {
-              if (topicController.text.trim().isEmpty) return;
-              setState(() {
-                isLoading = true;
-                resultText = '';
-              });
-
-              final prompt = 'Напиши $selectedFormat для короткого видео на тему: ${topicController.text.trim()}. Сделай текст цепляющим, динамичным и готовым для начитки.';
-
+            Future _gen() async {
+              if (_controller.text.isEmpty) return;
+              setState(() => _loading = true);
               try {
-                final response = await http.post(
+                final res = await http.post(
                   Uri.parse('https://leingpt.ru/api/v1/chat/completions'),
                   headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': 'Bearer leinaCAQYbCbY4KFx3gr8Lgmp6s4uvX7RfKWGFoiuX9evlw',
+                    'Authorization': 'Bearer lein_aCAQYbCbY4KFx3gr8Lgmp6s4uvX7RfKWGFoiuX9evlw',
                   },
                   body: jsonEncode({
                     'model': 'gpt-4o-mini',
-                    'messages': 
-                      {'role': 'system', 'content': 'Ты профессиональный сценарист виральных Reels, Shorts и TikTok.'},
-                      {'role': 'user', 'content': prompt}
-                    ,
-                    'temperature': 0.7,
+                    'messages': [{'role': 'user', 'content': 'Напиши сценарий для видео: ' + _controller.text}],
                   }),
                 );
-
-                if (response.statusCode == 200) {
-                  final data = jsonDecode(utf8.decode(response.bodyBytes));
-                  setState(() {
-                    resultText = data['choices'][0]['message']['content'] ?? '';
-                  });
-                } else {
-                  setState(() {
-                    resultText = 'Ошибка API: ${response.statusCode}\nПроверь баланс ключа.';
-                  });
-                }
+                final data = jsonDecode(utf8.decode(res.bodyBytes));
+                setState(() => _text = data['choices'][0]['message']['content'] ?? '');
               } catch (e) {
-                setState(() {
-                  resultText = 'Сетевая ошибка: $e';
-                });
+                setState(() => _text = 'Ошибка: $e');
               } finally {
-                setState(() {
-                  isLoading = false;
-                });
+                setState(() => _loading = false);
               }
             }
 
             @override
             Widget build(BuildContext context) {
               return Scaffold(
-                appBar: AppBar(
-                  backgroundColor: const Color(0xFF1E293B),
-                  title: const Text('ScriptFlow AI 🎬', style: TextStyle(fontWeig
-
-ht: FontWeight.bold)),
-                  centerTitle: true,
-                ),
-                body: SingleChildScrollView(
-                  padding: const EdgeInsets.all(16.0),
+                appBar: AppBar(title: const Text('ScriptFlow AI')),
+                body: Padding(
+                  padding: const EdgeInsets.all(16),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1E293B),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFF334155)),
+                      TextField(controller: _controller, decoration: const InputDecoration(labelText: 'Тема')),
+                      const SizedBox(height: 10),
+                      ElevatedButton(onPressed: _loading ? null : _gen, child: const Text('Сгенерировать')),
+                      const SizedBox(height: 10),
+                      if (_text.isNotEmpty)
+                        ElevatedButton(
+                          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PrompterPage(text: _text))),
+                          child: const Text('Открыть суфлёр'),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Тема видео:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                            const SizedBox(height: 8),
-                            TextField(
-                              controller: _topicController,
-                              decoration: InputDecoration(
-                                hintText: 'Например: Топ-3 мифа об СССР',
-                                filled: true,
-                                fillColor: const Color(0xFF0F172A),
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            const Text('Формат:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                            const SizedBox(height: 8),
-                            DropdownButtonFormField(
-                              value: _selectedFormat,
-                              dropdownColor: const Color(0xFF1E293B),
-                              decoration: InputDecoration(
-                                filled: true,
-                                fillColor: const Color(0xFF0F172A),
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                              ),
-                              items: const [
-                                DropdownMenuItem(value: 'Виральный хук (TikTok)', child: Text('Виральный хук (TikTok)')),
-                                DropdownMenuItem(value: 'Полный сценарий (60 сек)', child: Text('Полный сценарий (60 сек)')),
-                                DropdownMenuItem(value: 'Интригующая история (Storytelling)', child: Text('Интригующая история')),
-                              ],
-                              onChanged: (val) {
-                                if (val != null) setState(() => _selectedFormat = val);
-                              },
-                            ),
-                            const SizedBox(height: 20),
-                            SizedBox(
-                              width: double.infinity,
-                              height: 50,
-                              child: ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF6366F1),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                ),
-                                onPressed: _isLoading ? null : _generateScript,
-                                child: _isLoading
-                                    ? const CircularProgressIndicator(color: Colors.white)
-                                    : const Text('Сгенерировать сценарий ✨', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      if (_resultText.isNotEmpty) ...[
-
-Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1E293B),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: const Color(0xFF10B981)),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Text('Готовый текст суфлёра:', style: TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold)),
-                                  IconButton(
-                                    icon: const Icon(Icons.play_circle_fill, color: Color(0xFF10B981), size: 30),
-                                    onPressed: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(builder: (_) => TeleprompterScreen(text: _resultText)),
-                                      );
-                                    },
-                                    tooltip: 'Запустить суфлёр',
-                                  ),
-                                ],
-                              ),
-                              const Divider(color: Color(0xFF334155)),
-                              SelectableText(_resultText, style: const TextStyle(fontSize: 16, height: 1.4)),
-                            ],
-                          ),
-                        ),
-                      ],
+                      Expanded(child: SingleChildScrollView(child: Text(_text))),
                     ],
                   ),
                 ),
@@ -231,109 +90,51 @@ Container(
             }
           }
 
-          class TeleprompterScreen extends StatefulWidget {
+          class PrompterPage extends StatefulWidget {
             final String text;
-            const TeleprompterScreen({super.key, required this.text});
-
+            const PrompterPage({super.key, required this.text});
             @override
-            State createState() => _TeleprompterScreenState();
+            State createState() => _PrompterPageState();
           }
 
-          class _TeleprompterScreenState extends State {
-            final ScrollController _scrollController = ScrollController();
-            bool _isScrolling = false;
-            double _speed = 2.0;
+          class _PrompterPageState extends State {
+            final _scroll = ScrollController();
+            bool _run = false;
 
-            void _toggleScroll() {
-              setState(() {
-                _isScrolling = !_isScrolling;
-              });
-              if (_isScrolling) {
-                _startAutoScroll();
-              }
-            }
-
-            void _startAutoScroll() async {
-              while (_isScrolling && _scrollController.hasClients) {
+            void _scrollLoop() async {
+              while (_run && _scroll.hasClients) {
                 await Future.delayed(const Duration(milliseconds: 50));
-                if (!_isScrolling || !_scrollController.hasClients) break;
-                final maxScroll = _scrollController.position.maxScrollExtent;
-                final current = _scrollController.offset;
-                if (current >= maxScroll) {
-                  setState(() => _isScrolling = false);
-                  break;
-                }
-                _scrollController.jumpTo(current + _speed);
+                if (!_run || !_scroll.hasClients) break;
+                _scroll.jumpTo(_scroll.offset + 2.0);
               }
-            }
-
-            @override
-            void dispose() {
-              _scrollController.dispose();
-              super.dispose();
             }
 
             @override
             Widget build(BuildContext context) {
-              return Scaffold(
-                backgroundColor: Colors.black,
-                appBar: AppBar(
-                  backgroundColor: Colors.black,
-                  title: const Text('Режим суфлёра'),
-                  actions: [
-                    IconButton(
-                      icon: Icon(_isScrolling ? Icons.pause : Icons.play_arrow, size: 30),
-                      onPressed: _toggleScroll,
-                    ),
-                  ],
-                ),
-                body: Column(
-                  children: [
-                    Expanded(
-                      child: SingleChildScrollView(
+              return Scaf
 
-controller: scrollController,
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
-                        child: Text(
-                          widget.text,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold, height: 1.5),
-                        ),
-                      ),
-                    ),
-                    Container(
-                      color: const Color(0xFF1E293B),
-                      padding: const EdgeInsets.all(12),
-                      child: Row(
-                        children: [
-                          const Text('Скорость: ', style: TextStyle(color: Colors.white)),
-                          Expanded(
-                            child: Slider(
-                              value: speed,
-                              min: 0.5,
-                              max: 8.0,
-                              onChanged: (val) => setState(() => speed = val),
-                            ),
-                          ),
-                          FloatingActionButton.small(
-                            backgroundColor: const Color(0xFF6366F1),
-                            onPressed: toggleScroll,
-                            child: Icon(isScrolling ? Icons.pause : Icons.playarrow),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+fold(
+                backgroundColor: Colors.black,
+                appBar: AppBar(backgroundColor: Colors.black),
+                floatingActionButton: FloatingActionButton(
+                  onPressed: () {
+                    setState(() => _run = !_run);
+                    if (_run) _scrollLoop();
+                  },
+                  child: Icon(_run ? Icons.pause : Icons.play_arrow),
+                ),
+                body: SingleChildScrollView(
+                  controller: _scroll,
+                  padding: const EdgeInsets.all(20),
+                  child: Text(widget.text, style: const TextStyle(color: Colors.white, fontSize: 28)),
                 ),
               );
             }
           }
           EOF
-
           flutter build apk --release --no-tree-shake-icons
 
-      - name: Upload Release APK
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: ScriptFlow-Release-APK
           path: app/build/app/outputs/flutter-apk/app-release.apk
